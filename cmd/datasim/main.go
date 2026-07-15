@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/hoongkai/data-traffic-sim/internal/generator"
@@ -29,6 +30,29 @@ func main() {
 				Type: schema.Timestamp,
 			},
 		},
+	}
+
+	// Added dataset reading for analyzer.go use
+	if dataset := os.Getenv("DATASET"); dataset != "" {
+		inferredSchema, err := schema.AnalyzeCSV(dataset)
+		if err != nil {
+			panic(err)
+		}
+
+		dataSchema = inferredSchema
+
+		fmt.Println("Inferred schema:")
+
+		for _, column := range dataSchema.Columns {
+			fmt.Printf(
+				"  %s: type=%s nullable=%t\n",
+				column.Name,
+				column.Type,
+				column.Nullable,
+			)
+		}
+
+		fmt.Println()
 	}
 
 	g := generator.New(time.Now().UnixNano())
