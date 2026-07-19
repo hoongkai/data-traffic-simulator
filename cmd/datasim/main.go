@@ -11,89 +11,78 @@ import (
 )
 
 func main() {
-	dataSchema := schema.Schema{
-		Columns: []schema.Column{
-			{
-				Name: "user_id",
-				Type: schema.Integer,
-			},
-			{
-				Name: "country",
-				Type: schema.String,
-			},
-			{
-				Name: "amount",
-				Type: schema.Float,
-			},
-			{
-				Name: "created_at",
-				Type: schema.Timestamp,
-			},
-		},
+	dataset := os.Getenv("DATASET")
+
+	if dataset == "" {
+		fmt.Println("DATASET is required")
+		return
 	}
 
-	if dataset := os.Getenv("DATASET"); dataset != "" {
-		inferredSchema, err := schema.AnalyzeCSV(dataset)
-		if err != nil {
-			panic(err)
-		}
+	dataSchema, err := schema.AnalyzeCSV(dataset)
+	if err != nil {
+		panic(err)
+	}
 
-		dataSchema = inferredSchema
+	profile, err := schema.ProfileCSV(
+		dataset,
+		dataSchema,
+	)
+	if err != nil {
+		panic(err)
+	}
 
-		fmt.Println("Inferred schema:")
+	fmt.Printf(
+		"Dataset: %s\n",
+		dataset,
+	)
 
-		for _, column := range dataSchema.Columns {
+	fmt.Printf(
+		"Rows: %d\n\n",
+		profile.RowCount,
+	)
+
+	for _, column := range profile.Columns {
+		fmt.Printf(
+			"%s: type=%s values=%d nulls=%d unique=%d\n",
+			column.Name,
+			column.Type,
+			column.Count,
+			column.NullCount,
+			column.UniqueCount,
+		)
+
+		if column.Type == schema.Integer ||
+			column.Type == schema.Float {
 			fmt.Printf(
-				"  %s: type=%s nullable=%t\n",
-				column.Name,
-				column.Type,
-				column.Nullable,
+				"  min=%.4f max=%.4f mean=%.4f\n",
+				column.Min,
+				column.Max,
+				column.Mean,
 			)
 		}
 
-		profile, err := schema.ProfileCSV(dataset, dataSchema)
-		if err != nil {
-			panic(err)
-		}
+		if column.Type == schema.String {
+			fmt.Println("  frequencies:")
 
-		fmt.Printf("\nDataset profile:\n")
-		fmt.Printf("  Rows: %d\n\n", profile.RowCount)
-
-		for _, column := range profile.Columns {
-			fmt.Printf("%s\n", column.Name)
-			fmt.Printf("  Type: %s\n", column.Type)
-			fmt.Printf("  Values: %d\n", column.Count)
-			fmt.Printf("  Nulls: %d\n", column.NullCount)
-			fmt.Printf("  Unique: %d\n", column.UniqueCount)
-
-			if column.Type == schema.Integer ||
-				column.Type == schema.Float {
-				fmt.Printf("  Min: %.4f\n", column.Min)
-				fmt.Printf("  Max: %.4f\n", column.Max)
-				fmt.Printf("  Mean: %.4f\n", column.Mean)
+			for value, count := range column.Frequencies {
+				fmt.Printf(
+					"    %s: %d\n",
+					value,
+					count,
+				)
 			}
-
-			if column.Type == schema.String {
-				fmt.Println("  Frequencies:")
-
-				for value, count := range column.Frequencies {
-					fmt.Printf(
-						"    %s: %d\n",
-						value,
-						count,
-					)
-				}
-			}
-
-			fmt.Println()
 		}
 	}
 
-	g := generator.New(time.Now().UnixNano())
+	fmt.Println()
+
+	g := generator.New(
+		time.Now().UnixNano(),
+	)
 
 	sim := simulator.New(
 		g,
-		dataSchema,
+		profile,
 		10,
 	)
 
