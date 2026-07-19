@@ -9,46 +9,47 @@ import (
 
 type Simulator struct {
 	generator *generator.Generator
-	schema    schema.Schema
+	profile   schema.DatasetProfile
 	rate      int
 }
 
 func New(
 	g *generator.Generator,
-	s schema.Schema,
+	profile schema.DatasetProfile,
 	rate int,
 ) *Simulator {
 	return &Simulator{
 		generator: g,
-		schema:    s,
+		profile:   profile,
 		rate:      rate,
 	}
 }
 
 func (s *Simulator) Run(
 	duration time.Duration,
-) <-chan []string {
-	output := make(chan []string)
+) <-chan []any {
+	stream := make(chan []any)
 
 	go func() {
-		defer close(output)
+		defer close(stream)
 
-		ticker := time.NewTicker(time.Second / time.Duration(s.rate))
+		ticker := time.NewTicker(
+			time.Second / time.Duration(s.rate),
+		)
 		defer ticker.Stop()
 
-		timer := time.NewTimer(duration)
-		defer timer.Stop()
+		timeout := time.After(duration)
 
 		for {
 			select {
 			case <-ticker.C:
-				output <- s.generator.GenerateRow(s.schema)
+				stream <- s.generator.Generate(s.profile)
 
-			case <-timer.C:
+			case <-timeout:
 				return
 			}
 		}
 	}()
 
-	return output
+	return stream
 }
