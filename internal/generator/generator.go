@@ -10,12 +10,14 @@ import (
 )
 
 type Generator struct {
-	rng *rand.Rand
+	rng    *rand.Rand
+	nextID int64
 }
 
 func New(seed int64) *Generator {
 	return &Generator{
-		rng: rand.New(rand.NewSource(seed)),
+		rng:    rand.New(rand.NewSource(seed)),
+		nextID: 1,
 	}
 }
 
@@ -46,6 +48,10 @@ func (g *Generator) generateColumn(column schema.ColumnProfile) any {
 
 	switch column.Type {
 	case schema.Integer:
+		if column.IsID {
+			return g.generateID()
+		}
+
 		return g.generateInteger(column)
 
 	case schema.Float:
@@ -63,6 +69,13 @@ func (g *Generator) generateColumn(column schema.ColumnProfile) any {
 	default:
 		return nil
 	}
+}
+
+func (g *Generator) generateID() int64 {
+	id := g.nextID
+	g.nextID++
+
+	return id
 }
 
 func (g *Generator) generateInteger(

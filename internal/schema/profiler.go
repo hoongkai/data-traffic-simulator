@@ -58,35 +58,22 @@ func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
 			columnProfile.Frequencies[value]++
 
 			switch column.Type {
-			case Integer:
+			case Integer, Float:
 				number, err := strconv.ParseFloat(value, 64)
-				if err == nil {
-					if numericCount == 0 || number < columnProfile.Min {
-						columnProfile.Min = number
-					}
-
-					if numericCount == 0 || number > columnProfile.Max {
-						columnProfile.Max = number
-					}
-
-					sum += number
-					numericCount++
+				if err != nil {
+					continue
 				}
 
-			case Float:
-				number, err := strconv.ParseFloat(value, 64)
-				if err == nil {
-					if numericCount == 0 || number < columnProfile.Min {
-						columnProfile.Min = number
-					}
-
-					if numericCount == 0 || number > columnProfile.Max {
-						columnProfile.Max = number
-					}
-
-					sum += number
-					numericCount++
+				if numericCount == 0 || number < columnProfile.Min {
+					columnProfile.Min = number
 				}
+
+				if numericCount == 0 || number > columnProfile.Max {
+					columnProfile.Max = number
+				}
+
+				sum += number
+				numericCount++
 			}
 		}
 
@@ -96,8 +83,27 @@ func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
 			columnProfile.Mean = sum / float64(numericCount)
 		}
 
+		columnProfile.IsID = isIdentifier(columnProfile)
+
 		profile.Columns[i] = columnProfile
 	}
 
 	return profile, nil
+}
+
+func isIdentifier(column ColumnProfile) bool {
+	if column.Type != Integer {
+		return false
+	}
+
+	name := strings.ToLower(strings.TrimSpace(column.Name))
+
+	if name == "id" ||
+		strings.HasSuffix(name, "_id") ||
+		strings.HasSuffix(name, "id") {
+		return column.UniqueCount == column.Count &&
+			column.NullCount == 0
+	}
+
+	return false
 }

@@ -10,6 +10,7 @@ type ColumnProfile struct {
 	Max         float64
 	Mean        float64
 	Frequencies map[string]int
+	IsID        bool
 }
 
 type DatasetProfile struct {
