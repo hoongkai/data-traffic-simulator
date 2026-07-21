@@ -11,13 +11,13 @@ import (
 
 type Generator struct {
 	rng    *rand.Rand
-	nextID int64
+	nextID map[string]int64
 }
 
 func New(seed int64) *Generator {
 	return &Generator{
 		rng:    rand.New(rand.NewSource(seed)),
-		nextID: 1,
+		nextID: make(map[string]int64),
 	}
 }
 
@@ -49,7 +49,7 @@ func (g *Generator) generateColumn(column schema.ColumnProfile) any {
 	switch column.Type {
 	case schema.Integer:
 		if column.IsID {
-			return g.generateID()
+			return g.generateID(column.Name)
 		}
 
 		return g.generateInteger(column)
@@ -71,9 +71,13 @@ func (g *Generator) generateColumn(column schema.ColumnProfile) any {
 	}
 }
 
-func (g *Generator) generateID() int64 {
-	id := g.nextID
-	g.nextID++
+func (g *Generator) generateID(columnName string) int64 {
+	if _, exists := g.nextID[columnName]; !exists {
+		g.nextID[columnName] = 1
+	}
+
+	id := g.nextID[columnName]
+	g.nextID[columnName]++
 
 	return id
 }
