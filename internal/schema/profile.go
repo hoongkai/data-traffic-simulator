@@ -6,11 +6,15 @@ type ColumnProfile struct {
 	Count       int
 	NullCount   int
 	UniqueCount int
-	Min         float64
-	Max         float64
-	Mean        float64
+
+	Min    float64
+	Max    float64
+	Mean   float64
+	StdDev float64
+
 	Frequencies map[string]int
-	IsID        bool
+
+	IsID bool
 }
 
 type DatasetProfile struct {

@@ -127,6 +127,7 @@ func isIdentifier(
 	}
 
 	// Only do sequential when column name implies it is an identifier
+	// TODO: perhaps improve on string/UUID detection
 	if strings.Contains(name, "number") ||
 		strings.Contains(name, "identifier") ||
 		strings.Contains(name, "key") ||
