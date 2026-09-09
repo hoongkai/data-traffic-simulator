@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
+func ProfileCSV(
+	path string,
+	dataSchema Schema,
+) (DatasetProfile, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return DatasetProfile{}, err
@@ -39,9 +42,7 @@ func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
 		}
 
 		values := make([]string, 0, len(records))
-
-		var sum float64
-		var numericCount int
+		numericValues := make([]float64, 0, len(records))
 
 		for _, record := range records {
 			if i >= len(record) {
@@ -67,23 +68,35 @@ func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
 					continue
 				}
 
-				if numericCount == 0 || number < columnProfile.Min {
+				numericValues = append(
+					numericValues,
+					number,
+				)
+
+				if len(numericValues) == 1 ||
+					number < columnProfile.Min {
 					columnProfile.Min = number
 				}
 
-				if numericCount == 0 || number > columnProfile.Max {
+				if len(numericValues) == 1 ||
+					number > columnProfile.Max {
 					columnProfile.Max = number
 				}
-
-				sum += number
-				numericCount++
 			}
 		}
 
-		columnProfile.UniqueCount = len(columnProfile.Frequencies)
+		columnProfile.UniqueCount =
+			len(columnProfile.Frequencies)
 
-		if numericCount > 0 {
-			columnProfile.Mean = sum / float64(numericCount)
+		if len(numericValues) > 0 {
+			columnProfile.Mean =
+				calculateMean(numericValues)
+
+			columnProfile.StdDev =
+				calculateStdDev(
+					numericValues,
+					columnProfile.Mean,
+				)
 		}
 
 		columnProfile.IsID = isIdentifier(
@@ -97,6 +110,58 @@ func ProfileCSV(path string, dataSchema Schema) (DatasetProfile, error) {
 	return profile, nil
 }
 
+func calculateMean(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	var sum float64
+
+	for _, value := range values {
+		sum += value
+	}
+
+	return sum / float64(len(values))
+}
+
+func calculateStdDev(
+	values []float64,
+	mean float64,
+) float64 {
+	if len(values) < 2 {
+		return 0
+	}
+
+	var sumSquaredDiff float64
+
+	for _, value := range values {
+		diff := value - mean
+		sumSquaredDiff += diff * diff
+	}
+
+	// Population standard deviation.
+	variance :=
+		sumSquaredDiff /
+			float64(len(values))
+
+	return sqrt(variance)
+}
+
+func sqrt(value float64) float64 {
+	if value <= 0 {
+		return 0
+	}
+
+	// Newton-Raphson square root.
+	x := value
+
+	for i := 0; i < 10; i++ {
+		x = 0.5 * (x + value/x)
+	}
+
+	return x
+}
+
 func isIdentifier(
 	column ColumnProfile,
 	values []string,
@@ -105,29 +170,30 @@ func isIdentifier(
 		return false
 	}
 
-	uniqueness := float64(column.UniqueCount) /
-		float64(column.Count)
+	uniqueness :=
+		float64(column.UniqueCount) /
+			float64(column.Count)
 
-	name := strings.ToLower(
-		strings.TrimSpace(column.Name),
-	)
+	name :=
+		strings.ToLower(
+			strings.TrimSpace(column.Name),
+		)
 
-	// Identifiers
+	// Strong identifier names.
 	if name == "id" ||
 		strings.HasSuffix(name, "_id") ||
 		strings.HasSuffix(name, "id") {
 		return uniqueness >= 0.95
 	}
 
-	// Other identifiers column name variations
+	// Other common identifier naming conventions.
 	if strings.HasSuffix(name, "_number") ||
 		strings.HasSuffix(name, "_no") ||
 		strings.HasSuffix(name, "_code") {
 		return uniqueness >= 0.95
 	}
 
-	// Only do sequential when column name implies it is an identifier
-	// TODO: perhaps improve on string/UUID detection
+	// Sequential detection for identifier-like names.
 	if strings.Contains(name, "number") ||
 		strings.Contains(name, "identifier") ||
 		strings.Contains(name, "key") ||

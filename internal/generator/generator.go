@@ -21,7 +21,9 @@ func New(seed int64) *Generator {
 	}
 }
 
-func (g *Generator) Generate(profile schema.DatasetProfile) []any {
+func (g *Generator) Generate(
+	profile schema.DatasetProfile,
+) []any {
 	row := make([]any, len(profile.Columns))
 
 	for i, column := range profile.Columns {
@@ -31,7 +33,9 @@ func (g *Generator) Generate(profile schema.DatasetProfile) []any {
 	return row
 }
 
-func (g *Generator) generateColumn(column schema.ColumnProfile) any {
+func (g *Generator) generateColumn(
+	column schema.ColumnProfile,
+) any {
 	if column.Count == 0 {
 		return nil
 	}
@@ -71,7 +75,9 @@ func (g *Generator) generateColumn(column schema.ColumnProfile) any {
 	}
 }
 
-func (g *Generator) generateID(columnName string) int64 {
+func (g *Generator) generateID(
+	columnName string,
+) int64 {
 	if _, exists := g.nextID[columnName]; !exists {
 		g.nextID[columnName] = 1
 	}
@@ -85,26 +91,82 @@ func (g *Generator) generateID(columnName string) int64 {
 func (g *Generator) generateInteger(
 	column schema.ColumnProfile,
 ) int64 {
-	min := int64(math.Round(column.Min))
-	max := int64(math.Round(column.Max))
+	value := g.generateGaussian(
+		column.Mean,
+		column.StdDev,
+	)
 
-	if min == max {
-		return min
-	}
+	value = clamp(
+		value,
+		column.Min,
+		column.Max,
+	)
 
-	return min + g.rng.Int63n(max-min+1)
+	return int64(math.Round(value))
 }
 
 func (g *Generator) generateFloat(
 	column schema.ColumnProfile,
 ) float64 {
-	if column.Min == column.Max {
-		return column.Min
+	value := g.generateGaussian(
+		column.Mean,
+		column.StdDev,
+	)
+
+	return clamp(
+		value,
+		column.Min,
+		column.Max,
+	)
+}
+
+func (g *Generator) generateGaussian(
+	mean float64,
+	stdDev float64,
+) float64 {
+	if stdDev <= 0 {
+		return mean
 	}
 
-	return column.Min +
-		g.rng.Float64()*
-			(column.Max-column.Min)
+	/*
+		Box-Muller transform.
+
+		Converts two uniformly distributed random
+		numbers into a normally distributed value.
+	*/
+
+	u1 := g.rng.Float64()
+
+	// Avoid ln(0).
+	if u1 == 0 {
+		u1 = math.SmallestNonzeroFloat64
+	}
+
+	u2 := g.rng.Float64()
+
+	z := math.Sqrt(
+		-2.0 * math.Log(u1),
+	) * math.Cos(
+		2.0 * math.Pi * u2,
+	)
+
+	return mean + z*stdDev
+}
+
+func clamp(
+	value float64,
+	min float64,
+	max float64,
+) float64 {
+	if value < min {
+		return min
+	}
+
+	if value > max {
+		return max
+	}
+
+	return value
 }
 
 func (g *Generator) generateCategorical(
@@ -124,6 +186,7 @@ func (g *Generator) generateCategorical(
 	}
 
 	target := g.rng.Intn(total)
+
 	current := 0
 
 	for value, count := range column.Frequencies {
