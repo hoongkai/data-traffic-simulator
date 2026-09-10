@@ -103,8 +103,9 @@ func main() {
 	fmt.Println("\nCorrelations:")
 
 	for _, column := range profile.Columns {
-		if column.Type == schema.Integer ||
-			column.Type == schema.Float {
+		if (column.Type == schema.Integer ||
+			column.Type == schema.Float) &&
+			!column.IsID {
 			fmt.Printf(
 				"%-18s",
 				column.Name,

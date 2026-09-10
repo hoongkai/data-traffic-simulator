@@ -107,19 +107,19 @@ func ProfileCSV(
 		profile.Columns[i] = columnProfile
 	}
 
-	// Collect numeric data for correlation analysis.
+	// Collect numeric for correlation analysis
 	numericColumns := make([]int, 0)
 
-	for i, column := range dataSchema.Columns {
-		if column.Type == Integer ||
-			column.Type == Float {
+	for i, column := range profile.Columns {
+		if (column.Type == Integer ||
+			column.Type == Float) &&
+			!column.IsID {
 			numericColumns = append(
 				numericColumns,
 				i,
 			)
 		}
 	}
-
 	for _, record := range records {
 		row := make(
 			[]float64,
