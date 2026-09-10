@@ -3,37 +3,59 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/hoongkai/data-traffic-sim/internal/generator"
 	"github.com/hoongkai/data-traffic-sim/internal/schema"
-	"github.com/hoongkai/data-traffic-sim/internal/simulator"
 )
 
 func main() {
-	dataset := os.Getenv("DATASET")
+	datasetPath := os.Getenv("DATASET")
 
-	if dataset == "" {
-		fmt.Println("DATASET is required")
-		return
+	if datasetPath == "" {
+		datasetPath = "testdata/Iris.csv"
 	}
 
-	dataSchema, err := schema.AnalyzeCSV(dataset)
-	if err != nil {
-		panic(err)
+	dataSchema := schema.Schema{
+		Columns: []schema.Column{
+			{
+				Name: "Id",
+				Type: schema.Integer,
+			},
+			{
+				Name: "SepalLengthCm",
+				Type: schema.Float,
+			},
+			{
+				Name: "SepalWidthCm",
+				Type: schema.Float,
+			},
+			{
+				Name: "PetalLengthCm",
+				Type: schema.Float,
+			},
+			{
+				Name: "PetalWidthCm",
+				Type: schema.Float,
+			},
+			{
+				Name: "Species",
+				Type: schema.String,
+			},
+		},
 	}
 
 	profile, err := schema.ProfileCSV(
-		dataset,
+		datasetPath,
 		dataSchema,
 	)
+
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf(
 		"Dataset: %s\n",
-		dataset,
+		datasetPath,
 	)
 
 	fmt.Printf(
@@ -74,21 +96,42 @@ func main() {
 		}
 	}
 
+	correlations := schema.CalculateCorrelations(
+		profile.NumericData,
+	)
+
+	fmt.Println("\nCorrelations:")
+
+	for _, column := range profile.Columns {
+		if column.Type == schema.Integer ||
+			column.Type == schema.Float {
+			fmt.Printf(
+				"%-18s",
+				column.Name,
+			)
+		}
+	}
+
 	fmt.Println()
 
-	g := generator.New(
-		time.Now().UnixNano(),
-	)
+	for i := range correlations {
+		for j := range correlations[i] {
+			fmt.Printf(
+				"%-18.4f",
+				correlations[i][j],
+			)
+		}
 
-	sim := simulator.New(
-		g,
-		profile,
-		10,
-	)
+		fmt.Println()
+	}
 
-	stream := sim.Run(3 * time.Second)
+	fmt.Println()
 
-	for row := range stream {
+	g := generator.New(42)
+
+	for i := 0; i < 30; i++ {
+		row := g.Generate(profile)
+
 		fmt.Println(row)
 	}
 }

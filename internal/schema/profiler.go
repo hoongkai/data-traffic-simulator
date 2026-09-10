@@ -107,6 +107,53 @@ func ProfileCSV(
 		profile.Columns[i] = columnProfile
 	}
 
+	// Collect numeric data for correlation analysis.
+	numericColumns := make([]int, 0)
+
+	for i, column := range dataSchema.Columns {
+		if column.Type == Integer ||
+			column.Type == Float {
+			numericColumns = append(
+				numericColumns,
+				i,
+			)
+		}
+	}
+
+	for _, record := range records {
+		row := make(
+			[]float64,
+			0,
+			len(numericColumns),
+		)
+
+		for _, columnIndex := range numericColumns {
+			if columnIndex >= len(record) {
+				continue
+			}
+
+			value := strings.TrimSpace(
+				record[columnIndex],
+			)
+
+			number, err := strconv.ParseFloat(
+				value,
+				64,
+			)
+
+			if err != nil {
+				continue
+			}
+
+			row = append(row, number)
+		}
+
+		if len(row) == len(numericColumns) {
+			profile.NumericData =
+				append(profile.NumericData, row)
+		}
+	}
+
 	return profile, nil
 }
 
@@ -139,7 +186,6 @@ func calculateStdDev(
 		sumSquaredDiff += diff * diff
 	}
 
-	// Population standard deviation.
 	variance :=
 		sumSquaredDiff /
 			float64(len(values))
@@ -152,7 +198,6 @@ func sqrt(value float64) float64 {
 		return 0
 	}
 
-	// Newton-Raphson square root.
 	x := value
 
 	for i := 0; i < 10; i++ {
@@ -179,21 +224,18 @@ func isIdentifier(
 			strings.TrimSpace(column.Name),
 		)
 
-	// Strong identifier names.
 	if name == "id" ||
 		strings.HasSuffix(name, "_id") ||
 		strings.HasSuffix(name, "id") {
 		return uniqueness >= 0.95
 	}
 
-	// Other common identifier naming conventions.
 	if strings.HasSuffix(name, "_number") ||
 		strings.HasSuffix(name, "_no") ||
 		strings.HasSuffix(name, "_code") {
 		return uniqueness >= 0.95
 	}
 
-	// Sequential detection for identifier-like names.
 	if strings.Contains(name, "number") ||
 		strings.Contains(name, "identifier") ||
 		strings.Contains(name, "key") ||

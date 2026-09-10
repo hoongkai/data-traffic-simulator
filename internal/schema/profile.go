@@ -20,4 +20,6 @@ type ColumnProfile struct {
 type DatasetProfile struct {
 	RowCount int
 	Columns  []ColumnProfile
+
+	NumericData [][]float64
 }
