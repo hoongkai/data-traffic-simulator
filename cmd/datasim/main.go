@@ -17,30 +17,12 @@ func main() {
 
 	dataSchema := schema.Schema{
 		Columns: []schema.Column{
-			{
-				Name: "Id",
-				Type: schema.Integer,
-			},
-			{
-				Name: "SepalLengthCm",
-				Type: schema.Float,
-			},
-			{
-				Name: "SepalWidthCm",
-				Type: schema.Float,
-			},
-			{
-				Name: "PetalLengthCm",
-				Type: schema.Float,
-			},
-			{
-				Name: "PetalWidthCm",
-				Type: schema.Float,
-			},
-			{
-				Name: "Species",
-				Type: schema.String,
-			},
+			{Name: "Id", Type: schema.Integer},
+			{Name: "SepalLengthCm", Type: schema.Float},
+			{Name: "SepalWidthCm", Type: schema.Float},
+			{Name: "PetalLengthCm", Type: schema.Float},
+			{Name: "PetalWidthCm", Type: schema.Float},
+			{Name: "Species", Type: schema.String},
 		},
 	}
 
@@ -63,9 +45,10 @@ func main() {
 		profile.RowCount,
 	)
 
+	// Display column profiles.
 	for _, column := range profile.Columns {
 		fmt.Printf(
-			"%s: type=%s values=%d nulls=%d unique=%d\n",
+			"%s: type=%s values=%d nulls=%d unique=%d",
 			column.Name,
 			column.Type,
 			column.Count,
@@ -73,14 +56,21 @@ func main() {
 			column.UniqueCount,
 		)
 
-		if (column.Type == schema.Integer ||
-			column.Type == schema.Float) &&
-			!column.IsID {
+		if column.IsID {
+			fmt.Print(" [ID]")
+		}
+
+		fmt.Println()
+
+		if column.Type == schema.Integer ||
+			column.Type == schema.Float {
+
 			fmt.Printf(
-				"  min=%.4f max=%.4f mean=%.4f\n",
+				"  min=%.4f max=%.4f mean=%.4f stddev=%.4f\n",
 				column.Min,
 				column.Max,
 				column.Mean,
+				column.StdDev,
 			)
 		}
 
@@ -97,6 +87,8 @@ func main() {
 		}
 	}
 
+	// Display correlations between numeric columns.
+	// ID columns are excluded.
 	correlations := schema.CalculateCorrelations(
 		profile.NumericData,
 	)
@@ -107,6 +99,7 @@ func main() {
 		if (column.Type == schema.Integer ||
 			column.Type == schema.Float) &&
 			!column.IsID {
+
 			fmt.Printf(
 				"%-18s",
 				column.Name,
@@ -127,13 +120,39 @@ func main() {
 		fmt.Println()
 	}
 
-	fmt.Println()
+	// Display conditional profiles.
+	// These describe numeric distributions under
+	// different categorical conditions.
+	fmt.Println("\nConditional Profiles:")
+
+	for _, conditional := range profile.ConditionalProfiles {
+
+		fmt.Printf(
+			"\n%s = %s\n",
+			conditional.ConditionColumn,
+			conditional.ConditionValue,
+		)
+
+		for columnName, stats := range conditional.Numeric {
+
+			fmt.Printf(
+				"  %-18s min=%.4f max=%.4f mean=%.4f stddev=%.4f\n",
+				columnName,
+				stats.Min,
+				stats.Max,
+				stats.Mean,
+				stats.StdDev,
+			)
+		}
+	}
+
+	// Generate sample records, global numeric config
+	fmt.Println("\nGenerated Records:")
 
 	g := generator.New(42)
 
 	for i := 0; i < 30; i++ {
 		row := g.Generate(profile)
-
 		fmt.Println(row)
 	}
 }

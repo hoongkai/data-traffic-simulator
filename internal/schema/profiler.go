@@ -154,6 +154,12 @@ func ProfileCSV(
 		}
 	}
 
+	profile.ConditionalProfiles =
+		buildConditionalProfiles(
+			records,
+			profile,
+		)
+
 	return profile, nil
 }
 
