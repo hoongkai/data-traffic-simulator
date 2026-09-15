@@ -26,8 +26,35 @@ func (g *Generator) Generate(
 ) []any {
 	row := make([]any, len(profile.Columns))
 
+	categoricalValues := make(map[string]string)
+
 	for i, column := range profile.Columns {
-		row[i] = g.generateColumn(column)
+		if column.IsID {
+			row[i] = g.generateID(column.Name)
+			continue
+		}
+
+		if column.Type == schema.String {
+			value := g.generateCategorical(column)
+
+			row[i] = value
+			categoricalValues[column.Name] = value
+
+			continue
+		}
+	}
+
+	for i, column := range profile.Columns {
+		if column.IsID ||
+			column.Type == schema.String {
+			continue
+		}
+
+		row[i] = g.generateColumn(
+			column,
+			profile,
+			categoricalValues,
+		)
 	}
 
 	return row
@@ -35,6 +62,8 @@ func (g *Generator) Generate(
 
 func (g *Generator) generateColumn(
 	column schema.ColumnProfile,
+	profile schema.DatasetProfile,
+	categoricalValues map[string]string,
 ) any {
 	if column.Count == 0 {
 		return nil
@@ -50,12 +79,24 @@ func (g *Generator) generateColumn(
 		}
 	}
 
+	conditionalStats := findConditionalStats(
+		column.Name,
+		profile.ConditionalProfiles,
+		categoricalValues,
+	)
+
+	if conditionalStats != nil {
+		switch column.Type {
+		case schema.Integer:
+			return g.generateConditionalInteger(*conditionalStats)
+
+		case schema.Float:
+			return g.generateConditionalFloat(*conditionalStats)
+		}
+	}
+
 	switch column.Type {
 	case schema.Integer:
-		if column.IsID {
-			return g.generateID(column.Name)
-		}
-
 		return g.generateInteger(column)
 
 	case schema.Float:
@@ -67,12 +108,70 @@ func (g *Generator) generateColumn(
 	case schema.Timestamp:
 		return g.generateTimestamp()
 
-	case schema.String:
-		return g.generateCategorical(column)
-
 	default:
 		return nil
 	}
+}
+
+func findConditionalStats(
+	columnName string,
+	profiles []schema.ConditionalProfile,
+	categoricalValues map[string]string,
+) *schema.NumericStats {
+	for _, profile := range profiles {
+		generatedValue, exists :=
+			categoricalValues[profile.ConditionColumn]
+
+		if !exists {
+			continue
+		}
+
+		if generatedValue != profile.ConditionValue {
+			continue
+		}
+
+		stats, exists := profile.Numeric[columnName]
+
+		if !exists {
+			continue
+		}
+
+		return &stats
+	}
+
+	return nil
+}
+
+func (g *Generator) generateConditionalInteger(
+	stats schema.NumericStats,
+) int64 {
+	value := g.generateGaussian(
+		stats.Mean,
+		stats.StdDev,
+	)
+
+	value = clamp(
+		value,
+		stats.Min,
+		stats.Max,
+	)
+
+	return int64(math.Round(value))
+}
+
+func (g *Generator) generateConditionalFloat(
+	stats schema.NumericStats,
+) float64 {
+	value := g.generateGaussian(
+		stats.Mean,
+		stats.StdDev,
+	)
+
+	return clamp(
+		value,
+		stats.Min,
+		stats.Max,
+	)
 }
 
 func (g *Generator) generateID(
@@ -128,16 +227,12 @@ func (g *Generator) generateGaussian(
 		return mean
 	}
 
-	/*
-		Box-Muller transform.
-
-		Converts two uniformly distributed random
-		numbers into a normally distributed value.
-	*/
+	// below uses Box-Muller transform:
+	// converts two uniformly distributed random numbers into a normally distributed value
 
 	u1 := g.rng.Float64()
 
-	// Avoid ln(0).
+	// avoid ln(0)
 	if u1 == 0 {
 		u1 = math.SmallestNonzeroFloat64
 	}
@@ -145,9 +240,9 @@ func (g *Generator) generateGaussian(
 	u2 := g.rng.Float64()
 
 	z := math.Sqrt(
-		-2.0 * math.Log(u1),
+		-2.0*math.Log(u1),
 	) * math.Cos(
-		2.0 * math.Pi * u2,
+		2.0*math.Pi*u2,
 	)
 
 	return mean + z*stdDev
