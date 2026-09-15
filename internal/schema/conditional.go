@@ -13,7 +13,7 @@ func buildConditionalProfiles(
 
 	for conditionIndex, conditionColumn := range profile.Columns {
 
-		if conditionColumn.Type != String {
+		if !isCategoricalCandidate(conditionColumn) {
 			continue
 		}
 
@@ -34,18 +34,6 @@ func buildConditionalProfiles(
 			}
 		}
 
-		// A column with only one value does not provide
-		// useful conditional information.
-		if len(conditionValues) < 2 {
-			continue
-		}
-
-		// Do not treat a column where every row has a
-		// different value as a categorical dimension.
-		if len(conditionValues) >= len(records) {
-			continue
-		}
-
 		for conditionValue := range conditionValues {
 
 			numeric :=
@@ -58,8 +46,7 @@ func buildConditionalProfiles(
 					continue
 				}
 
-				// IDs are excluded from conditional
-				// statistical modelling.
+				// exclude ID from conditional profiling
 				if column.IsID {
 					continue
 				}
@@ -144,6 +131,35 @@ func buildConditionalProfiles(
 	}
 
 	return profiles
+}
+
+func isCategoricalCandidate(
+	column ColumnProfile,
+) bool {
+	if column.Type != String {
+		return false
+	}
+
+	if column.Count == 0 ||
+		column.UniqueCount < 2 {
+		return false
+	}
+
+	uniqueRatio :=
+		float64(column.UniqueCount) /
+			float64(column.Count)
+
+	// ignore columns where almost every value is unique
+	if uniqueRatio > 0.2 {
+		return false
+	}
+
+	// cater for  high cardinality columns (for conditional)
+	if column.UniqueCount > 100 {
+		return false
+	}
+
+	return true
 }
 
 func calculateMin(
