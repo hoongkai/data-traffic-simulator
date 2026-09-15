@@ -44,20 +44,197 @@ func (g *Generator) Generate(
 		}
 	}
 
+	numericColumns := make([]int, 0)
+
 	for i, column := range profile.Columns {
 		if column.IsID ||
 			column.Type == schema.String {
 			continue
 		}
 
-		row[i] = g.generateColumn(
-			column,
-			profile,
-			categoricalValues,
+		numericColumns = append(
+			numericColumns,
+			i,
 		)
 	}
 
+	conditionalProfile :=
+		findMatchingConditionalProfile(
+			profile.ConditionalProfiles,
+			categoricalValues,
+		)
+
+	if conditionalProfile != nil {
+		values, ok :=
+			g.generateConditionalNumericValues(
+				profile,
+				*conditionalProfile,
+				numericColumns,
+			)
+
+		if ok {
+			for i, columnIndex := range numericColumns {
+
+				row[columnIndex] =
+					values[i]
+			}
+
+			return row
+		}
+	}
+
+	for _, columnIndex := range numericColumns {
+
+		column :=
+			profile.Columns[columnIndex]
+
+		row[columnIndex] =
+			g.generateColumn(
+				column,
+				profile,
+				categoricalValues,
+			)
+	}
+
 	return row
+}
+
+func (g *Generator) generateConditionalNumericValues(
+	profile schema.DatasetProfile,
+	conditional schema.ConditionalProfile,
+	numericColumns []int,
+) ([]any, bool) {
+	columnCount := len(numericColumns)
+
+	if columnCount == 0 {
+		return nil, false
+	}
+
+	correlationMatrix :=
+		make([][]float64, columnCount)
+
+	for i := range correlationMatrix {
+		correlationMatrix[i] =
+			make([]float64, columnCount)
+	}
+
+	for i, columnIndex := range numericColumns {
+
+		columnName :=
+			profile.Columns[columnIndex].Name
+
+		for j, otherColumnIndex := range numericColumns {
+
+			otherColumnName :=
+				profile.Columns[otherColumnIndex].Name
+
+			columnCorrelations, exists :=
+				conditional.Correlations[columnName]
+
+			if !exists {
+				return nil, false
+			}
+
+			value, exists :=
+				columnCorrelations[otherColumnName]
+
+			if !exists {
+				return nil, false
+			}
+
+			correlationMatrix[i][j] =
+				value
+		}
+	}
+
+	cholesky, ok :=
+		choleskyDecomposition(
+			correlationMatrix,
+		)
+
+	if !ok {
+		return nil, false
+	}
+
+	independent :=
+		make([]float64, columnCount)
+
+	for i := range independent {
+		independent[i] =
+			g.generateGaussian(
+				0,
+				1,
+			)
+	}
+
+	correlated :=
+		make([]float64, columnCount)
+
+	for i := 0; i < columnCount; i++ {
+		for j := 0; j <= i; j++ {
+			correlated[i] +=
+				cholesky[i][j] *
+					independent[j]
+		}
+	}
+
+	result :=
+		make([]any, columnCount)
+
+	for i, columnIndex := range numericColumns {
+
+		column :=
+			profile.Columns[columnIndex]
+
+		stats, exists :=
+			conditional.Numeric[column.Name]
+
+		if !exists {
+			return nil, false
+		}
+
+		value :=
+			stats.Mean +
+				correlated[i]*stats.StdDev
+
+		value =
+			clamp(
+				value,
+				stats.Min,
+				stats.Max,
+			)
+
+		if column.Type == schema.Integer {
+			result[i] =
+				int64(math.Round(value))
+		} else {
+			result[i] = value
+		}
+	}
+
+	return result, true
+}
+
+func findMatchingConditionalProfile(
+	profiles []schema.ConditionalProfile,
+	categoricalValues map[string]string,
+) *schema.ConditionalProfile {
+	for i := range profiles {
+		value, exists :=
+			categoricalValues[profiles[i].ConditionColumn]
+
+		if !exists {
+			continue
+		}
+
+		if value ==
+			profiles[i].ConditionValue {
+
+			return &profiles[i]
+		}
+	}
+
+	return nil
 }
 
 func (g *Generator) generateColumn(
@@ -130,7 +307,8 @@ func findConditionalStats(
 			continue
 		}
 
-		stats, exists := profile.Numeric[columnName]
+		stats, exists :=
+			profile.Numeric[columnName]
 
 		if !exists {
 			continue
@@ -303,4 +481,62 @@ func (g *Generator) generateTimestamp() time.Time {
 	)
 
 	return now.Add(-offset)
+}
+
+// Cholesky decomposition:
+// Convert correlation matrix into a lower-triangular matrix to generate correlated random values
+
+func choleskyDecomposition(
+	matrix [][]float64,
+) ([][]float64, bool) {
+	n := len(matrix)
+
+	if n == 0 {
+		return nil, false
+	}
+
+	result :=
+		make([][]float64, n)
+
+	for i := range result {
+		if len(matrix[i]) != n {
+			return nil, false
+		}
+
+		result[i] =
+			make([]float64, n)
+	}
+
+	for i := 0; i < n; i++ {
+		for j := 0; j <= i; j++ {
+			sum := matrix[i][j]
+
+			for k := 0; k < j; k++ {
+				sum -=
+					result[i][k] *
+						result[j][k]
+			}
+
+			if i == j {
+				if sum <= 1e-12 {
+					return nil, false
+				}
+
+				result[i][j] =
+					math.Sqrt(sum)
+
+				continue
+			}
+
+			if result[j][j] == 0 {
+				return nil, false
+			}
+
+			result[i][j] =
+				sum /
+					result[j][j]
+		}
+	}
+
+	return result, true
 }
