@@ -39,6 +39,9 @@ func buildConditionalProfiles(
 			numeric :=
 				make(map[string]NumericStats)
 
+			numericColumns :=
+				make([]int, 0)
+
 			for columnIndex, column := range profile.Columns {
 
 				if column.Type != Integer &&
@@ -46,7 +49,6 @@ func buildConditionalProfiles(
 					continue
 				}
 
-				// exclude ID from conditional profiling
 				if column.IsID {
 					continue
 				}
@@ -113,11 +115,26 @@ func buildConditionalProfiles(
 							mean,
 						),
 					}
+
+				numericColumns =
+					append(
+						numericColumns,
+						columnIndex,
+					)
 			}
 
 			if len(numeric) == 0 {
 				continue
 			}
+
+			correlations :=
+				buildConditionalCorrelations(
+					records,
+					profile,
+					conditionIndex,
+					conditionValue,
+					numericColumns,
+				)
 
 			profiles = append(
 				profiles,
@@ -125,12 +142,107 @@ func buildConditionalProfiles(
 					ConditionColumn: conditionColumn.Name,
 					ConditionValue:  conditionValue,
 					Numeric:         numeric,
+					Correlations:    correlations,
 				},
 			)
 		}
 	}
 
 	return profiles
+}
+
+func buildConditionalCorrelations(
+	records [][]string,
+	profile DatasetProfile,
+	conditionIndex int,
+	conditionValue string,
+	numericColumns []int,
+) map[string]map[string]float64 {
+
+	values := make([][]float64, 0)
+
+	for _, record := range records {
+		if conditionIndex >= len(record) {
+			continue
+		}
+
+		recordCondition :=
+			strings.TrimSpace(
+				record[conditionIndex],
+			)
+
+		if recordCondition != conditionValue {
+			continue
+		}
+
+		row := make(
+			[]float64,
+			0,
+			len(numericColumns),
+		)
+
+		valid := true
+
+		for _, columnIndex := range numericColumns {
+
+			if columnIndex >= len(record) {
+				valid = false
+				break
+			}
+
+			value :=
+				strings.TrimSpace(
+					record[columnIndex],
+				)
+
+			number, err :=
+				strconv.ParseFloat(
+					value,
+					64,
+				)
+
+			if err != nil {
+				valid = false
+				break
+			}
+
+			row = append(row, number)
+		}
+
+		if valid {
+			values = append(values, row)
+		}
+	}
+
+	matrix :=
+		CalculateCorrelations(values)
+
+	result :=
+		make(map[string]map[string]float64)
+
+	for i, columnI := range numericColumns {
+
+		nameI :=
+			profile.Columns[columnI].Name
+
+		result[nameI] =
+			make(map[string]float64)
+
+		for j, columnJ := range numericColumns {
+
+			nameJ :=
+				profile.Columns[columnJ].Name
+
+			if i < len(matrix) &&
+				j < len(matrix[i]) {
+
+				result[nameI][nameJ] =
+					matrix[i][j]
+			}
+		}
+	}
+
+	return result
 }
 
 func isCategoricalCandidate(
@@ -149,12 +261,10 @@ func isCategoricalCandidate(
 		float64(column.UniqueCount) /
 			float64(column.Count)
 
-	// ignore columns where almost every value is unique
 	if uniqueRatio > 0.2 {
 		return false
 	}
 
-	// cater for  high cardinality columns (for conditional)
 	if column.UniqueCount > 100 {
 		return false
 	}

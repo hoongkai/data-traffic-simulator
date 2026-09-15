@@ -29,6 +29,7 @@ type ConditionalProfile struct {
 	ConditionColumn string
 	ConditionValue  string
 	Numeric         map[string]NumericStats
+	Correlations    map[string]map[string]float64
 }
 
 type DatasetProfile struct {

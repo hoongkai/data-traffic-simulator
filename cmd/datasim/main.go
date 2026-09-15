@@ -45,7 +45,7 @@ func main() {
 		profile.RowCount,
 	)
 
-	// Display column profiles.
+	// Display column profiles
 	for _, column := range profile.Columns {
 		fmt.Printf(
 			"%s: type=%s values=%d nulls=%d unique=%d",
@@ -87,8 +87,7 @@ func main() {
 		}
 	}
 
-	// Display correlations between numeric columns.
-	// ID columns are excluded.
+	// Display correlations between numeric columns
 	correlations := schema.CalculateCorrelations(
 		profile.NumericData,
 	)
@@ -120,9 +119,7 @@ func main() {
 		fmt.Println()
 	}
 
-	// Display conditional profiles.
-	// These describe numeric distributions under
-	// different categorical conditions.
+	// Display conditional profiles
 	fmt.Println("\nConditional Profiles:")
 
 	for _, conditional := range profile.ConditionalProfiles {
@@ -143,6 +140,36 @@ func main() {
 				stats.Mean,
 				stats.StdDev,
 			)
+		}
+	}
+
+	fmt.Println("\nConditional Correlations:")
+
+	for _, conditional := range profile.ConditionalProfiles {
+
+		fmt.Printf(
+			"\n%s = %s\n",
+			conditional.ConditionColumn,
+			conditional.ConditionValue,
+		)
+
+		for columnName, correlations := range conditional.Correlations {
+
+			fmt.Printf(
+				"  %-18s",
+				columnName,
+			)
+
+			for otherColumn, value := range correlations {
+
+				fmt.Printf(
+					"%s=%.4f ",
+					otherColumn,
+					value,
+				)
+			}
+
+			fmt.Println()
 		}
 	}
 
