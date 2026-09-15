@@ -73,8 +73,9 @@ func main() {
 			column.UniqueCount,
 		)
 
-		if column.Type == schema.Integer ||
-			column.Type == schema.Float {
+		if (column.Type == schema.Integer ||
+			column.Type == schema.Float) &&
+			!column.IsID {
 			fmt.Printf(
 				"  min=%.4f max=%.4f mean=%.4f\n",
 				column.Min,
